@@ -4,7 +4,16 @@ namespace MonitorSourceSwitch;
 
 public static class MonitorService
 {
-    public static int Run(int displayIndex, byte inputValue, byte commandCode, byte registerAddress)
+    /// <summary>
+    /// DisplayNumber, 1 is the laptop, 2 is the first external monitor, 3 is the second external monitor, etc.
+    /// DisplayNumber must be a screen that has multiple inputs, not your LAPTOP Screen!
+    /// </summary>
+    /// <param name="displayNumber"></param>
+    /// <param name="inputValue"></param>
+    /// <param name="commandCode"></param>
+    /// <param name="registerAddress"></param>
+    /// <returns></returns>
+    public static int Run(int displayNumber, byte inputValue, byte commandCode, byte registerAddress)
     {
         // Initialize NVAPI.
         var status = NvApi.Initialize();
@@ -15,15 +24,16 @@ public static class MonitorService
         }
 
         // Enumerate display handles.
-        var displayHandles = new IntPtr[NvApi.MaxPhysicalGpus * NvApi.MaxDisplayHeads];
+        // var displayHandles = new IntPtr[NvApi.MaxPhysicalGpus * NvApi.MaxDisplayHeads];
+        var displays = new List<nint>();
         status = NvApi.Ok;
         for (uint i = 0; status == NvApi.Ok; i++)
         {
             status = NvApi.EnumNvidiaDisplayHandle(i, out IntPtr displayHandle);
 
-            if (status == NvApi.Ok)
+            if (status == NvApi.Ok && displayHandle != IntPtr.Zero)
             {
-                displayHandles[i] = displayHandle;
+                displays.Add(displayHandle);
             }
             else if (status != NvApi.EndEnumeration)
             {
@@ -32,17 +42,29 @@ public static class MonitorService
             }
         }
 
-        if (displayIndex < 0 || displayIndex >= displayHandles.Length || displayHandles[displayIndex] == IntPtr.Zero)
+        if (displays.Count == 0)
         {
-            Console.Error.WriteLine($"Display index {displayIndex} is not a valid NVIDIA display.");
+            Console.Error.WriteLine("No displays found.");
             return 1;
         }
-
-        var hDisplay = displayHandles[displayIndex];
+        
+        IntPtr selectedDisplay;
+        
+        var displayIndex = displayNumber - 1 < 0 ? 0 : displayNumber - 1;
+        if (displayNumber > displays.Count || displays[displayIndex] == IntPtr.Zero)
+        {
+            Console.Error.WriteLine($"Display Number {displayNumber} is not a valid display number.");
+            Console.Error.WriteLine("Auto selecting the first display available.");
+            selectedDisplay = displays[0];
+        }
+        else
+        {
+            selectedDisplay = displays[displayIndex];
+        }
 
         // Get GPU id associated with display ID.
         var gpuHandles = new IntPtr[NvApi.MaxPhysicalGpus];
-        status = NvApi.GetPhysicalGpusFromDisplay(hDisplay, gpuHandles, out uint gpuCount);
+        status = NvApi.GetPhysicalGpusFromDisplay(selectedDisplay, gpuHandles, out _);
         if (status != NvApi.Ok)
         {
             Console.Error.WriteLine($"NvAPI_GetPhysicalGPUsFromDisplay() failed with status {status}");
@@ -52,7 +74,7 @@ public static class MonitorService
         var hGpu = gpuHandles[0];
 
         // Get the display id for subsequent I2C calls via NVAPI.
-        status = NvApi.GetAssociatedDisplayOutputId(hDisplay, out uint outputId);
+        status = NvApi.GetAssociatedDisplayOutputId(selectedDisplay, out var outputId);
         if (status != NvApi.Ok)
         {
             Console.Error.WriteLine($"NvAPI_GetAssociatedDisplayOutputId() failed with status {status}");
@@ -61,10 +83,11 @@ public static class MonitorService
 
         if (!WriteValueToMonitor(hGpu, outputId, inputValue, commandCode, registerAddress))
         {
-            Console.Error.WriteLine("Changing input failed");
+            Console.Error.WriteLine("Changing input failed, did you try to change input on a screen with only 1 Input?, Try changing the display number value, DisplayNumber must be a screen that has multiple inputs, not your LAPTOP Screen!");
             return 1;
         }
 
+        Console.WriteLine($"Successfully changed input to 0x{inputValue:X2} (command code 0x{commandCode:X2}) on display {displayNumber}.");
         return 0;
     }
 

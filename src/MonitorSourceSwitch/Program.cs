@@ -6,19 +6,21 @@ using MonitorSourceSwitch;
 // use on Windows to check which monitors you have, a popup is displayed:  mstsc /l
 // LG UltraGear evo 45GX950B have to have extended display first
 
-if (args.Length is 0)
+if (args.Length is 0 or 1)
 {
-	Console.Error.WriteLine("No arguments provided!");
-	Console.WriteLine("Usage: MonitorSourceSwitch.exe <inputName> [<displayswitch> (true || false)]");
+	Console.Error.WriteLine("No/Wrong arguments provided!");
+	Console.WriteLine("Usage: MonitorSourceSwitch.exe <displayNumber> <inputName> [<display switch Extend || Internal> (true || false)]");
+	Console.WriteLine("DisplayNumber 1 would be your only display, 2 would be the first external display, 3 would be the second external display, etc.");
+	Console.WriteLine("You must have windows display extended or be using the the monitor screen to change the input of your external monitor, if you have only the laptop display, you cannot change the input.");
     return 1;
 }
 
-var inputParameters = args[0].ToLowerInvariant() switch
+var inputParameters = args[1].ToLowerInvariant() switch
 {
-	"hdmi1" => ["1", "0x90", "0xF4", "0x50"],
-	"hdmi2" => ["1", "0x91", "0xF4", "0x50"],
-	"dp" => ["1", "0xD0", "0xF4", "0x50"],
-	"usbc" => ["1", "0xD1", "0xF4", "0x50"],
+	"hdmi1" => [args[0], "0x90", "0xF4", "0x50"],
+	"hdmi2" => [args[0], "0x91", "0xF4", "0x50"],
+	"dp" => [args[0], "0xD0", "0xF4", "0x50"],
+	"usbc" => [args[0], "0xD1", "0xF4", "0x50"],
 	_ => args
 };
 
@@ -28,9 +30,9 @@ try
 	const string extend = "extend";
 	string? displaySwitchMode = null;
 
-	if (args.Length > 1)
+	if (args.Length > 2)
 	{
-		displaySwitchMode = bool.TryParse(args[1], out var extendOut) && extendOut
+		displaySwitchMode = bool.TryParse(args[2], out var extendOut) && extendOut
 			? extend
 			: @internal;
 	}
@@ -42,12 +44,12 @@ try
 		await Task.Delay(1000);
 	}
 	
-	var displayIndex = int.Parse(inputParameters[0], CultureInfo.InvariantCulture);
+	var displayNumber = int.Parse(inputParameters[0], CultureInfo.InvariantCulture);
 	var inputValue = MonitorService.ParseHexByte(inputParameters[1]);
 	var commandCode = MonitorService.ParseHexByte(inputParameters[2]);
 	var registerAddress = inputParameters.Length == 4 ? MonitorService.ParseHexByte(inputParameters[3]) : (byte)0x51;
 
-	var result = MonitorService.Run(displayIndex, inputValue, commandCode, registerAddress);
+	var result = MonitorService.Run(displayNumber, inputValue, commandCode, registerAddress);
 	
 	// make display internal last if arg was passed as false
 	if(displaySwitchMode is @internal)
