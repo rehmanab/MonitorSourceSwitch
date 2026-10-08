@@ -49,7 +49,19 @@ try
 	var commandCode = MonitorService.ParseHexByte(inputParameters[2]);
 	var registerAddress = inputParameters.Length == 4 ? MonitorService.ParseHexByte(inputParameters[3]) : (byte)0x51;
 
-	var result = MonitorService.Run(displayNumber, inputValue, commandCode, registerAddress);
+	for (var i = displayNumber; i > 0; i--)
+	{
+		var result = MonitorService.Run(i, inputValue, commandCode, registerAddress);
+		
+		if(result == 0)
+		{
+			Console.WriteLine($"Successfully changed input to {inputParameters[1]} for display number {displayNumber}.");
+			break;
+		}
+
+		Console.Error.WriteLine($"Failed to change input to {inputParameters[1]} for display number {displayNumber}. Trying previous display number...");
+	}
+	
 	
 	// make display internal last if arg was passed as false
 	if(displaySwitchMode is @internal)
@@ -60,7 +72,7 @@ try
 	
 	Console.WriteLine();
 	
-	return result;
+	return 0;
 }
 catch (Exception ex)
 {
